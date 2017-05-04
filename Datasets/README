@@ -1,6 +1,6 @@
 README: "Datasets" Folder
 
-Background: This folder allows us to draw from the O*NET 21.2 Database without directly pulling data via API requests.
+Background: This folder allows us to draw from the O*NET 21.2 Database without directly pulling data via API requests. .xlsx (Excel) files have been converted to .csv format, in advance, for convenience. However, all files are direct replicas of their O*NET 21.2 Database counterparts.
 
 Caveat: The downside of this is that these data are "snapshots" and require manual updates, rather than automatically updating via APIs.
 
