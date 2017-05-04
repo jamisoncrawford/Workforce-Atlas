@@ -4,5 +4,5 @@ Background: This folder allows us to draw from the O*NET 21.2 Database without d
 
 Caveat: The downside of this is that these data are "snapshots" and require manual updates, rather than automatically updating via APIs.
 
-You can find more detailed explanations for the variables at the O*NET Center using the following URL: 
+You can find more detailed explanations for each dataset at the O*NET Center using the following URL: 
 https://www.onetcenter.org/database.html?p=3
