@@ -1,8 +1,7 @@
 README: "Datasets" Folder
 
 Background: This folder allows us to draw from the O*NET 21.2 Database without directly pulling data via API requests.
+
 Caveat: The downside of this is that these data are "snapshots" and require manual updates, rather than automatically updating via APIs.
 
-You can find deeper explanations for the variables at the O*NET Center using the following URL:
-
-https://www.onetcenter.org/database.html?p=3
+You can find deeper explanations for the variables at the O*NET Center using the following URL: https://www.onetcenter.org/database.html?p=3
