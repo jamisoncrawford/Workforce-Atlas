@@ -25,4 +25,4 @@ The following steps will allow users to run current projects in RStudio:
 
 ### Updates
 05/04/17 Created "Learning Connections" repository; populated with datasets and mock generator and engine source code
-01/05/17 Updated occupation filtering R markdown script (v. 1.5); added formative research findings, other planning documents
+01/05/17 Updated occupation filtering R markdown script (v. 1.5); added formative research findings, other documents
