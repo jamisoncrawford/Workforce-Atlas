@@ -1,0 +1,799 @@
+---
+title: "Occupation Filter Engine"
+author: "Jamison R. Crawford"
+date: "May 2, 2017"
+output: html_document
+---
+
+ENGINE INSTRUCTIONS: This document has a series of mandatory steps for running the filtering engine, as well as some optional bits and bobs. Once you've filtered occupations according to the criteria in "STEP IV", you can quickly export the document to your working directory.
+
+Each grey strip, called a "code chunk", contains a series of code which has been divided very deliberately to perform different functions. You can run entire chunks by selecting the green play button in the upper-right corner of each. Most output is suppressed, but don't be suprised if the RStudio console (in the lower-left pane) expands, in which case you can just watch the magic happen.
+
+Most steps require you to simply run the code chunk. However, some include warnings and special notes - you'll want to read these. Some include background information, which provides a deeper understanding of what happens in each chunk. Have fun!
+
+
+
+STEP I: INSTALL PACKAGES
+
+*WARNING: If you've already run this chunk of code, try to avoid running it again unless you have difficulty loading packages in "STEP II". If you happen to run this code, it simply reinstalls packages - in this case, simply select "No" for "Updating Loaded Packages" prompts. 
+
+*NOTE: Your organization may have a proxy or firewall which precludes you from running this chunk and, therefore, using the tool - in this case, try speaking with your IT staff to find a workaround, or you can simply run this on a personal laptop or home desktop computer.
+
+INSTRUCTIONS: Run the following code chunk ONCE. You should not have to rerun it in the future, as these packages should remain installed. Each time you reopen the tool, however, you will have to load these packages into the environment (see "STEP II").
+
+
+```{r Install Packages, include=FALSE, echo=FALSE }
+
+#-------------------- Install Packages
+
+install.packages( "readr" )
+install.packages( "dplyr" )
+install.packages( "scales" )
+install.packages( "stringr" )
+install.packages( "ggplot2" )
+
+```
+
+
+
+STEP II: IMPORT DATA, LOAD PACKAGES, AND CREATE UNIQUE SUBSETS
+
+INSTRUCTIONS: Run code chunk.
+
+BACKGROUND: Running code chunk loads the above-installed packages necessary for reading in data from Github, manipulating the data, and visualizing filtered output. It also creates individual datasets with legends for filtering data in "STEP IV" and creates a dataset with a legend for comparing occupation archetype titles to unique identiers, called "O*NET-SOC Codes".
+
+
+```{r Import Data & Create Subsets, message=FALSE, echo=FALSE, warning=FALSE, include=FALSE }
+
+#-------------------- Load Packages
+
+library( readr )
+library( dplyr )
+library( scales )
+library( stringr )
+library( ggplot2 )
+
+
+#-------------------- Import CSVs (Updated to DB 22.0)
+
+Descriptions <- 
+  read_csv( "https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/Occupation%20Data%2022.0.csv" )
+Background <- 
+  read_csv( "https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/Education%2C%20Training%2C%20and%20Experience%2022.0.csv" )
+Categories <- 
+  read_csv( "https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/Education%2C%20Training%2C%20and%20Experience%20Categories%2022.0.csv" )
+Zones <- 
+  read_csv( "https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/Job%20Zones%2022.0.csv" )
+
+
+#-------------------- Cutomize Background Category Legends
+
+Categories_Ed <- filter( Categories , `Scale ID` == "RL" )
+Categories_Ex <- filter( Categories , `Scale ID` == "RW" )
+Categories_Ost <- filter( Categories , `Scale ID` == "PT" )
+Categories_Ojt <- filter( Categories , `Scale ID` == "OJ" )
+
+
+#-------------------- Create O*NET-SOC Code & Title Legend
+
+SOC <- select( Descriptions , `O*NET-SOC Code` , Title )
+
+rm( Categories )
+
+```
+
+
+
+(OPTIONAL) REMOVE RECOMMENDED SUPPRESSIONS 
+
+*WARNING: Running this chunk may remove valuable occupations from filter output. If you wish to revert data to include items recommended for suppression, simply rerun the above code chunk in "STEP II".
+
+BACKGROUND: Occupations are recommended for suppression when considered "low precision" according to the O*NET 21.2 Database; "low precision" may indicate a small sampel size of reporting incumbents (n), low variance, or large relative standard errors.
+
+
+```{r Suppress Recommended, echo=FALSE, include=FALSE }
+
+Background <- filter( Background , `Recommend Suppress` == "N" )
+
+```
+
+
+
+STEP III: MANIPULATE "Background" DATASET
+
+INSTRUCTIONS: Run code chunk.
+
+BACKGROUND: Run this code chunk to manipulate the clean the "Background" dataset. Because most O*NET data uses the same variable in different datasets, we can give those variables unique IDs here.
+
+
+```{r Background Data, echo=FALSE, include=FALSE }
+
+#-------------------- Cleaning "Background" Data
+
+Background <- filter( Background , `Data Value` != 0 ) # Remove Rows with 0% of Incumbent Votes
+Background <- select( Background , `O*NET-SOC Code` , `Element ID` , `Element Name` , `Scale ID` , Category , `Data Value` )
+
+
+#-------------------- Make New, Unique Column Names & Remove Old
+
+Background <- Background %>% mutate( `Background ID` = `Element ID` )
+Background <- Background %>% mutate( `Background Element` = `Element Name` ) 
+Background <- Background %>% mutate( `Background Scale` = `Scale ID` ) 
+Background <- Background %>% mutate( `Background Category` = `Category` )
+Background <- Background %>% mutate( `Background Value` = `Data Value` )
+Background <- select( Background , 
+                      `O*NET-SOC Code` , 
+                      `Background ID` , 
+                      `Background Element` , 
+                      `Background Scale` , 
+                      `Background Category` , 
+                      `Background Value` )
+
+```
+
+
+
+
+(OPTIONAL) VIEW CATEGORIES
+
+BACKGROUND: Running this code chunk will open four tabs, each containing legends for the education, related work experience, on-site, and on-job training categories. These inform the next code chunk, where you can modify these categories to filter your output. If you only want to open one legend, click on the line of code in this chunk and type "ctrl + r".
+
+
+```{r View Categories, echo=FALSE }
+
+View( Categories_Ed )
+View( Categories_Ex )
+View( Categories_Ost )
+View( Categories_Ojt )
+
+```
+
+
+
+STEP IV: ASSIGN CATEGORY & PERCENTAGE LIMITS
+
+INSTRUCTIONS: This is the part where you can choose criteria. ONLY edit the numbers - they will be assigned to variables and run in the next code chunk. Run this code chunk when you have modified the numbers according to the desired criteria. The percentage theshold indicates the maximum allowed percentage of reporting incumbents (on which this data is based) which fall into the maximum category you've defined.
+
+EXAMPLE: If you cap education ("ed") at "6" (Bachelor's degree) and a maximum percentage at "30" (30%), this means that any occupation in which at least 30% of incumbents have a Bachelor's degree will not be filtered and, therefore, will be included in output. Higher percentages are more discriminant.
+
+*NOTE: You must rerun this code chunk each time you change criteria.
+
+
+```{r Assign Criteria Values, include=FALSE }
+
+# Education
+
+"ed" <- 6 # Maximum Category ( Must be Number Between 1-12 )
+"edp" <- 75 # Maximum Percentage Threshold ( Must be integer between 0-100 )
+
+# Related Experience
+
+"ex" <- 7 # Maximum Category ( Must be Number Between 1-11 )
+"exp" <- 75 # Maximum Percentage Threshold ( Must be integer between 0-100 )
+
+# On-Site Training
+
+"ost" <- 7 # Maximum Category ( Must be Number Between 1-9 )
+"ostp" <- 75 # Maximum Percentage Threshold ( Must be integer between 0-100 )
+
+# On-the-Job Training
+
+"ojt" <- 7 # Maximum Category ( Must be Number Between 1-9 )
+"ojtp" <- 75 # Maximum Percentage Threshold ( Must be integer between 0-100 )
+
+```
+
+
+
+STEP V: CREATE, FILTER, & VISUALIZE SUBSETS
+
+INSTRUCTIONS: Run code chunk.
+
+BACKGROUND: This code chunk creates new data subsets filtered according to your criteria in "STEP IV". It then creates a rudimentary visualization of the total number of filtered jobs by eligbility category (e.g. "education").
+
+*NOTE: You must rerun this code chunk each time you change criteria in "STEP IV"
+
+
+```{r Produce Summary, echo=FALSE }
+
+
+#-------------------- Background Education
+
+Background_Ed <- filter( Background , 
+                         `Background Scale` == "RL" , # Filters only "Education" Scale
+                         `Background Category` <= ed ) # Removes Educational Background greater than or equal to "ed"
+
+Background_Ed <- Background_Ed %>%
+  group_by( `O*NET-SOC Code` ) %>% 
+  mutate( "Edp_Total" = sum( `Background Value` ) ) # Creates new column ("Edp_Total") totaling "Background Value" for each SOC Code
+
+Background_Ed <- filter( Background_Ed ,
+                         Edp_Total >= edp ) # Removes occupations not greater than or equal to threshold "edp"
+
+Background_Ed <- select( Background_Ed , 
+                         `O*NET-SOC Code` , 
+                         `Edp_Total`) # Reduce columns to SOC Codes and Total Percentage within Threshold
+
+Background_Ed <- unique( Background_Ed ) # Remove duplicate rows
+
+
+#-------------------- Background Work Experience
+
+Background_Ex <- filter( Background , 
+                         `Background Scale` == "RW" , # Filters only "Related Work Experience" Scale
+                         `Background Category` <= ex ) # Filters Related Work Experience less than or equal to "ex"
+
+Background_Ex <- Background_Ex %>%
+  group_by( `O*NET-SOC Code` ) %>% 
+  mutate( "Exp_Total" = sum( `Background Value` ) ) # Creates new column ("Exp_Total") totaling "Background Value" for each SOC Code
+
+Background_Ex <- filter( Background_Ex ,
+                         Exp_Total >= exp ) # Removes occupations not greater than or equal to threshold "exp"
+
+Background_Ex <- select( Background_Ex , 
+                         `O*NET-SOC Code` , 
+                         `Exp_Total`) # Reduce columns to SOC Codes, Background Scale, and Total Percentage within Threshold
+
+Background_Ex <- unique( Background_Ex ) # Remove duplicate rows
+
+
+#-------------------- Background On-Site Training
+
+Background_Ost <- filter( Background , 
+                         `Background Scale` == "PT" , # Filters only "On-Site Training" Scale
+                         `Background Category` <= ost ) # Filters On-Site Training less than or equal to "ost"
+
+Background_Ost <- Background_Ost %>%
+  group_by( `O*NET-SOC Code` ) %>% 
+  mutate( "Ostp_Total" = sum( `Background Value` ) ) # Creates new column ("Ostp_Total") totaling "Background Value" for each SOC Code
+
+Background_Ost <- filter( Background_Ost ,
+                         Ostp_Total >= ostp ) # Removes occupations not greater than or equal to threshold "ostp"
+
+Background_Ost <- select( Background_Ost , 
+                         `O*NET-SOC Code` , 
+                         `Ostp_Total`) # Reduce columns to SOC Codes, Background Scale, and Total Percentage within Threshold
+
+Background_Ost <- unique( Background_Ost ) # Remove duplicate rows
+
+
+#-------------------- Background On-the-Job Training
+
+Background_Ojt <- filter( Background , 
+                         `Background Scale` == "OJ" , # Filters only "On-the-Job Training" Scale
+                         `Background Category` <= ojt ) # Filters On-the-Job Training less than or equal to "ojt"
+
+Background_Ojt <- Background_Ojt %>%
+  group_by( `O*NET-SOC Code` ) %>% 
+  mutate( "Ojtp_Total" = sum( `Background Value` ) ) # Creates new column ("Ojtp_Total") totaling "Background Value" for each SOC Code
+
+Background_Ojt <- filter( Background_Ojt ,
+                         Ojtp_Total >= ojtp ) # Removes occupations not greater than or equal to threshold "ojtp"
+
+Background_Ojt <- select( Background_Ojt , 
+                          `O*NET-SOC Code` , 
+                          `Ojtp_Total`) # Reduce columns to SOC Codes, Background Scale, and Total Percentage within Threshold
+
+Background_Ojt <- unique( Background_Ojt ) # Remove duplicate rows
+
+
+#-------------------- Create Summary Dataframe of Eligible Jobs by Category
+
+Elig_Ed <- merge( Background_Ed , SOC )
+Elig_Ex <- merge( Background_Ex , SOC )
+Elig_Ost <- merge( Background_Ost , SOC )
+Elig_Ojt  <- merge( Background_Ojt , SOC ) # Attaches titles to eligible occupations by category
+
+Uniq_Back <- select( Background , 
+                     `O*NET-SOC Code` ) %>%
+  unique() # Retrieves unique occupations in "Background"
+
+
+#-------------------- Remove Obsolete Variables
+
+rm( Categories_Ed ,
+    Categories_Ex ,
+    Categories_Ojt ,
+    Categories_Ost ,
+    Background )
+
+#-------------------- Create Eligibility Dataframe According to Category
+
+Category <- c( "Education" , 
+               "Experience" , 
+               "On-Site Training" , 
+               "On-Job Training" )
+Frequency <- c( nrow( Elig_Ed ) , 
+                nrow( Elig_Ex) , 
+                nrow( Elig_Ost ) , 
+                nrow( Elig_Ojt ) )
+Elig_Sum <- data_frame( Category , 
+                        Frequency ) %>%
+  mutate( "Proportion" = percent( Frequency / nrow( Uniq_Back ) ) ) %>%
+  as.data.frame() # Creates categories, frequency in categories, and proportin of total
+
+
+#-------------------- Remove Obsolete Variables
+
+rm( Uniq_Back )
+
+#-------------------- Plot Eligiblity Summary by Category
+
+ggplot( Elig_Sum , aes( x = Category , y = Frequency , col = Proportion , fill = Proportion ) ) +
+  geom_bar( stat = "identity" ) +
+  ggtitle( "Filtered Occupations by Category" ) +
+  labs( x = "Category" , y = "Occupations per Category" ) +
+  theme( panel.background = element_blank() , legend.position = "none" ) +
+  coord_flip() +
+  geom_text( label = paste( Elig_Sum$Frequency, " (" , Elig_Sum$Proportion , ")" , sep = "" ) , 
+             position = "identity" , hjust = -.25 ) +
+  ylim( 0 , max( Elig_Sum$Frequency ) * 1.3 ) # Plot Filtered Occupations by Category (Education, Experience, On-Site/On-Job Training)
+
+
+#-------------------- Remove Obsolete Variables
+
+rm( ed ,
+    edp ,
+    ex ,
+    exp ,
+    ojt ,
+    ojtp ,
+    ost ,
+    ostp )
+
+```
+
+
+
+STEP VI: FILTER & PRODUCE SUMMARY
+
+INSTRUCTIONS: Run code chunk.
+
+BACKGROUND: This code chunk combines occupations filtered by category into a single dataset, removing occupations that do not meet all eight criteria in all four "Background" dimensions, and matches them with their occupation archetype titles according to their O*NET-SOC Codes. Lastly, it creates rudimentary visualizations of the total filtered occupations output and into which "Job Zones" they fall (a ranking of 1 to 5 indicating degree of professional development required), the total number of filtered jobs by eligbility category, and a list of filtered occupation titles and their "Job Zones".
+
+*NOTE: You must rerun this code chunk each time you change criteria.
+
+
+```{r Background Data, echo=FALSE }
+
+#-------------------- Merge Common Occupations
+
+Background_Eligible <- merge( Background_Ed , Background_Ex , by = "O*NET-SOC Code" )
+Background_Eligible <- merge( Background_Eligible , Background_Ost , by = "O*NET-SOC Code" )
+Background_Eligible <- merge( Background_Eligible , Background_Ojt , by = "O*NET-SOC Code" )
+
+Eligible_Title_Scales <- merge( Background_Eligible , SOC , by = "O*NET-SOC Code" )
+Eligible_Titles <- select( Eligible_Title_Scales , `O*NET-SOC Code` , Title )
+Eligible_Titles <- merge( Eligible_Titles , Zones )
+Eligible_Titles <- select( Eligible_Titles , `O*NET-SOC Code` , Title , `Job Zone` )
+Eligible_Titles <- Eligible_Titles[ order( Eligible_Titles$`Job Zone` ) , ]
+
+
+#-------------------- Remove Obsolete Variables
+
+rm( Background_Ed ,
+    Background_Ex ,
+    Background_Ojt ,
+    Background_Ost ,
+    SOC )
+
+
+#-------------------- Create Filter Summary Information
+
+Summary <- Eligible_Titles %>%
+  mutate( "Total" = nrow( Eligible_Titles) ) %>%
+  group_by( `Job Zone` ) %>%
+  mutate( "Occupations" = n() ,
+          "Zone" = `Job Zone` ) %>%
+  ungroup( `Job Zone` ) %>%
+  select( Zone , 
+          Occupations , 
+          Total ) %>%
+  mutate( "Proportion" = percent( Occupations / Total ) ) %>%
+  unique() %>% as.data.frame()
+
+
+#-------------------- Remove Obsolete Variables
+
+rm( Elig_Ed ,
+    Elig_Ex ,
+    Elig_Ojt ,
+    Elig_Ost ,
+    Elig_Sum ,
+    Eligible_Title_Scales ,
+    Background_Eligible ,
+    Category , 
+    Frequency )
+
+
+#-------------------- Plot & Print Summary Information
+
+ggplot( Summary , aes( x = Zone , y = Occupations , col = Proportion , fill = Proportion ) ) +
+  geom_bar( stat = "identity" ) +
+  ggtitle( paste( "Filtered:" , 
+                  Summary$Total , "Occupations", sep = " " ) ) +
+  labs( x = "Job Zone" , y = "Total Occupations per Zone" ) +
+  theme( panel.background = element_blank() , legend.position = "none" ) +
+  coord_flip() +
+  geom_text( label = paste( Summary$Occupations, " (" , Summary$Proportion , ")" , sep = "" ) , 
+             position = "identity" , hjust = -.25 ) +
+  ylim( 0 , max( Summary$Occupations ) * 1.3 ) # Plot Summary of Occupations by Job Zone
+
+print( paste( "(Zone " , Eligible_Titles$`Job Zone` , ") " , Eligible_Titles$Title , sep = "" ) ) # Print Eligible Titles
+
+```
+
+
+
+(OPTIONAL) VIEW "Eligible Titles" DATAFRAME
+
+BACKGROUND: Running this code chunk will open the newly filtered dataset into a new tab, sorted according to "Job Zones", and much easier to view, filter, or perform text-based searches.
+
+
+```{r View Eligible Titles, message=FALSE, warning=FALSE , echo=FALSE }
+
+View( Eligible_Titles )
+
+```
+
+
+
+(OPTIONAL) STEP VI: FILTER & PRODUCE SUMMARY AT SOC LEVEL
+
+INSTRUCTIONS: Run code chunk.
+
+Background: The following filters any occupations which are more detailed than the "SOC Level" (i.e. has a SOC Code ending differently than ".00").
+
+
+```{r Filter to SOC Level , message=FALSE, warning=FALSE, echo=FALSE }
+
+
+#-------------------- Filter Non-SOC Level Occupations
+
+Titles_SOC_Level <- filter( Eligible_Titles , 
+                            grepl( "^.+00$" , 
+                                   Eligible_Titles$`O*NET-SOC Code` ) == TRUE )
+
+
+#-------------------- Create SOC Level Summary
+
+Summary_SOC <- Titles_SOC_Level %>%
+  mutate( "Total" = nrow( Titles_SOC_Level ) ) %>%
+  group_by( `Job Zone` ) %>%
+  mutate( "Occupations" = n() ,
+          "Zone" = `Job Zone` ) %>%
+  ungroup( `Job Zone` ) %>%
+  select( Zone , 
+          Occupations , 
+          Total ) %>%
+  mutate( "Proportion" = percent( Occupations / Total ) ) %>%
+  unique() %>% as.data.frame()
+
+
+#-------------------- Remove ".00" Elements from SOC 
+
+
+Titles_SOC_Level <- mutate( Titles_SOC_Level , 
+                            "SOC" =  str_sub( Titles_SOC_Level$`O*NET-SOC Code` ,
+                                              1 ,
+                                              7) ) %>%
+  select( SOC ,
+          Title ,
+          `Job Zone` )
+
+
+#-------------------- Graph SOC Level Summary
+
+ggplot( Summary_SOC , aes( x = Zone , y = Occupations , col = Proportion , fill = Proportion ) ) +
+  geom_bar( stat = "identity" ) +
+  ggtitle( paste( "Filtered:" , 
+                  Summary_SOC$Total , "Occupations", sep = " " ) ) +
+  labs( x = "Job Zone" , y = "Total Occupations per Zone" ) +
+  theme( panel.background = element_blank() , legend.position = "none" ) +
+  coord_flip() +
+  geom_text( label = paste( Summary_SOC$Occupations, 
+                            " (" , Summary_SOC$Proportion , ")" , sep = "" ) , 
+             position = "identity" , hjust = -.25 ) +
+  ylim( 0 , max( Summary$Occupations ) * 1.3 ) # Plot Summary of Occupations by Job Zone
+
+
+```
+
+
+
+(OPTIONAL) STEP VII: Group Occupations According to BLS Classification
+
+Instructions: Run code chunk.
+
+```{r Group by BLS Occupation Profiles, message=FALSE, warning=FALSE, include=FALSE}
+
+
+#-------------------- Create "Titles" with SOC Code for Broad Classification
+
+
+Titles <- mutate( Titles_SOC_Level ,
+                  "bls_group" = str_sub( Titles_SOC_Level$`SOC` ,
+                                     1 ,
+                                     2) )
+
+
+#-------------------- Create "Group" Column of NAs
+
+
+Titles$Group <- rep( NA , nrow( Titles ) )
+
+
+#-------------------- Prescribe "Group" Category based on SOC Code
+
+
+Titles[ Titles$bls_group == 11 , ][ , "Group" ] <- "Management"
+Titles[ Titles$bls_group == 13 , ][ , "Group" ] <- "Business & Financial Operations"
+Titles[ Titles$bls_group == 15 , ][ , "Group" ] <- "Computer & Mathematical"
+Titles[ Titles$bls_group == 17 , ][ , "Group" ] <- "Architecture & Engineering"
+Titles[ Titles$bls_group == 19 , ][ , "Group" ] <- "Life, Physical, & Social Science"
+Titles[ Titles$bls_group == 21 , ][ , "Group" ] <- "Community & social Service"
+Titles[ Titles$bls_group == 23 , ][ , "Group" ] <- "Legal"
+Titles[ Titles$bls_group == 25 , ][ , "Group" ] <- "Education, Training, & Library"
+Titles[ Titles$bls_group == 27 , ][ , "Group" ] <- "Arts, Design, Entertainment, Sports, & Media"
+Titles[ Titles$bls_group == 29 , ][ , "Group" ] <- "Healthcare Practitioners & Technical"
+Titles[ Titles$bls_group == 31 , ][ , "Group" ] <- "Healthcare Support"
+Titles[ Titles$bls_group == 33 , ][ , "Group" ] <- "Protective Service"
+Titles[ Titles$bls_group == 35 , ][ , "Group" ] <- "Food Preparation & Serving Related"
+Titles[ Titles$bls_group == 37 , ][ , "Group" ] <- "Building & Grounds Cleaning & Maintenance"
+Titles[ Titles$bls_group == 39 , ][ , "Group" ] <- "Personal Care & Service"
+Titles[ Titles$bls_group == 41 , ][ , "Group" ] <- "Sales & Related"
+Titles[ Titles$bls_group == 43 , ][ , "Group" ] <- "Office & Administrative Support"
+Titles[ Titles$bls_group == 45 , ][ , "Group" ] <- "Farming, Fishing, & Forestry"
+Titles[ Titles$bls_group == 47 , ][ , "Group" ] <- "Contruction & Extraction"
+Titles[ Titles$bls_group == 49 , ][ , "Group" ] <- "Installation, Maintenance, & Repair"
+Titles[ Titles$bls_group == 51 , ][ , "Group" ] <- "Production"
+Titles[ Titles$bls_group == 53 , ][ , "Group" ] <- "Transportation & Material Moving"
+
+
+#-------------------- Remove Temporary "bls_group" Variable
+
+
+Titles <- select( Titles, 
+                  SOC ,
+                  Title ,
+                  `Job Zone` , 
+                  Group )
+
+
+#-------------------- Remove Obsolete Variables
+
+
+rm( Titles_SOC_Level ,
+    Zones ,
+    Summary ,
+    Eligible_Titles )
+
+
+```
+
+
+
+(OPTIONAL) STEP VIII: UPLOAD & CLEAN BLS DATASETS
+
+Instructions: Run code chunk.
+
+```{r Uploading BLS Datasets, message=FALSE, warning=FALSE, include=FALSE}
+
+#-------------------- Upload Datasets
+
+National <- 
+  read_csv("https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/national_M2016_dl.csv")
+
+State <- 
+  read_csv("https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/state_M2016_dl.csv")
+
+Definitions <- 
+  read_csv("https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/field_descriptions.csv")
+
+
+#-------------------- Clean "Definitions" Dictionary
+
+National <- select( National , 
+                    OCC_CODE ,
+                    OCC_TITLE ,
+                    TOT_EMP ,
+                    H_MEDIAN ,
+                    A_MEDIAN ) %>%
+  mutate( "SOC" = OCC_CODE ,
+          "Title" = OCC_TITLE ,
+          "Total" = TOT_EMP ,
+          "Hourly Median" = H_MEDIAN ,
+          "Annual Median" = A_MEDIAN ) %>%
+  select( SOC ,
+          Title ,
+          Total ,
+          `Hourly Median` ,
+          `Annual Median` )
+
+National$Total <- as.numeric(National$Total)
+National$`Hourly Median` <- as.numeric( as.character( National$`Hourly Median`))
+National$`Annual Median` <- as.numeric( gsub( "," , "" , National$`Annual Median` ))
+
+#-------------------- Clean "Definitions" Dictionary
+
+colnames(Definitions) <- Definitions[ 9 , ]
+Definitions <- Definitions[ -( 1:9 ) , ]
+
+```
+
+
+
+(OPTIONAL) STEP IX: MERGE WAGE DATA (BLS) WITH ONET DATA
+
+Instructions: Run code chunk.
+
+```{r Merge ONET & BLS, message=FALSE, warning=FALSE, include=FALSE}
+
+Titles <- inner_join( Titles , National )
+
+# Warning: Removes 2 occupations, viz. "Hunters and Trappers" & "Door-to-Door Sales Workers"
+
+```
+
+
+
+(OPTIONAL) STEP X: SET MINIMUM ANNUAL SALARY
+
+Instructions: Replace the number to set minimum theshold for median annual income; run code chunk.
+
+```{r Minimum Annual Salary, message=FALSE, warning=FALSE, include=FALSE}
+
+x <- 20420
+
+# Note: $20,420 is the national poverty line for a household size of 3 ($16,240 for 2; $12,060 for 1)
+
+```
+
+(OPTIONAL) STEP X CONTINUED: FILTER BY MINIMUM ANNUAL SALARY
+
+Instructions: Run code chunk.
+
+```{r Filter by Salary, message=FALSE, warning=FALSE, include=FALSE}
+
+Titles <- filter( Titles , 
+                  `Annual Median` >= x )
+
+rm( x )
+
+```
+
+
+
+(OPTIONAL) STEP XI: SET MINIMUM TOTAL EMPLOYED
+
+Instructions: Replace the number to set minimum theshold for total employed; run code chunk.
+
+```{r Filter by Total Employed, message=FALSE, warning=FALSE, include=FALSE}
+
+x <- 5000
+
+```
+
+(OPTIONAL) STEP XI CONTINUED: FILTER BY TOTAL EMPLOYED
+
+Instructions: Run code chunk.
+
+```{r Filter by Salary, message=FALSE, warning=FALSE, include=FALSE}
+
+Titles <- filter( Titles , !( `Total` <= x ) )
+
+rm( x )
+
+```
+
+
+
+(OPTIONAL) STEP XII: READ & CLEAN BLS PROJECTION DATA
+
+```{r Load BLS Data, message=FALSE, warning=FALSE, include=FALSE}
+
+#-------------------- Read In BLS Data from GitHub
+
+Projections <- 
+  read_csv("https://raw.githubusercontent.com/ProLiteracy/Learning-Connections/master/Datasets/ep_bls_14-24.csv")
+
+#-------------------- Clean Formatting & Rename Columns
+
+Projections <- Projections[ -( 1:3 ) , ]
+Projections <- Projections[ -( nrow(Projections) ) , ]
+colnames( Projections ) <- c( "Title" ,
+                              "SOC" ,
+                              "Type" ,
+                              "2014 Employment" ,
+                              "2024 Employment" ,
+                              "2014 Distribution (%)" ,
+                              "2024 Distribution (%)" ,
+                              "Change (Total)" ,
+                              "Change (%)" ,
+                              "2014-2024 Openings" )
+
+#-------------------- Remove Unneeded Rows
+
+Projections <- Projections[ , -(3:5) ]
+Projections <- Projections[ , -(1) ]
+
+#-------------------- Coerce Classes
+
+Projections$`Change (Total)` <- as.numeric( gsub( "," , "" , Projections$`Change (Total)` ))
+Projections$`2014-2024 Openings` <- as.numeric( gsub( "," , "" , Projections$`2014-2024 Openings` ))
+Projections$`2014 Distribution (%)` <- as.numeric( Projections$`2014 Distribution (%)` )
+Projections$`Change (%)` <- as.numeric( Projections$`Change (%)` )
+
+```
+
+
+
+(OPTIONAL) STEP XIII: MERGE BLS EP DATA WITH ONET & BLS WAGE
+
+```{r}
+
+Titles <- inner_join( Titles , Projections )
+
+```
+
+
+
+(OPTIONAL) STEP XIV: SET FILTER THRESHOLD FOR GROWTH/DECLINE (%)
+
+Instructions: Replace number with desired minimum percentage change threshold; run code chunk.
+
+```{r Growth/Decline (%) Threshold, message=FALSE, warning=FALSE, include=FALSE}
+
+x <- -5
+
+```
+
+(OPTIONAL) STEP XIV CONTINUED: FILTER BY GROWTH/DECLINE (%)
+
+```{r Growth/Decline Filter, message=FALSE, warning=FALSE, include=FALSE}
+
+Titles <- filter( Titles ,
+                  `Change (%)` > x )
+
+rm( x )
+
+```
+
+
+
+(OPTIONAL) STEP XV: Include "Descriptions" Variable
+
+Instructions: Run code chunk.
+
+```{r Include "Descriptions" Variable, message=FALSE, warning=FALSE, include=FALSE}
+
+#-------------------- Filter Non-SOC Level Occupations
+
+Descriptions <- filter( Descriptions , 
+                            grepl( "^.+00$" , 
+                                   Descriptions$`O*NET-SOC Code` ) == TRUE )
+
+#-------------------- Remove ".00" End from SOC Code
+
+Descriptions <- mutate( Descriptions , 
+                        "SOC" =  str_sub( Descriptions$`O*NET-SOC Code` ,
+                                          1 ,
+                                          7) ) %>%
+  select( SOC , Description )
+
+#-------------------- Merge Descriptions & Titles Dataframes
+
+Titles <- inner_join( Titles , Descriptions )
+
+#-------------------- Remove Obsolete
+
+rm( Descriptions ,
+    National ,
+    State ,
+    Summary_SOC ,
+    Projections ,
+    Definitions )
+
+```
+
+
