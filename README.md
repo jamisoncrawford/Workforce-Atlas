@@ -7,7 +7,7 @@ Use of Occupational Information Network Data (ONET) within this repository is re
 Jamison Crawford is a Project Manager at ProLiteracy, Inc.
 
 ### Purpose:
-This repository is designed to host the most recent iterations of applicable ONET datasets (currently ONET 21.2 Database) as well as source code intended for use in RStudio via RMarkdown. Current projects include a mock "Occupation Profile Generator" and "Occupation Filter Engine". In addition, "Design" houses strategic planning documents while "Visualizations" house explanatory visuals on the Workforce Atlas (WFA) occupation pool, which was created using the occupation filtering script in this repo.
+This repository is designed to host the most recent iterations of applicable ONET datasets (currently ONET 22.0 Database) as well as source code intended for use in RStudio via RMarkdown. Current projects include a mock "Occupation Profile Generator" and "Occupation Filter Engine". In addition, "Design" houses strategic planning documents while "Visualizations" house explanatory visuals on the Workforce Atlas (WFA) occupation pool, which was created using the occupation filtering script in this repo.
 
 ### Use Instructions I: Download R & RStudio
 The following steps will allow collaborators to access RStudio (required):
